@@ -77,6 +77,7 @@
     <script>
         document.getElementById('last-update').innerText = new Date(document.lastModified).toLocaleString('vi-VN');
         let currentExam = "";
+        let currentSubject = "";
         let questions = [];
         let currentIndex = 0;
         let userAnswers = []; // Save answers per question
@@ -97,33 +98,43 @@
 
         // 0. Khởi tạo danh sách bộ đề từ biến EXAM_LIST trong file data/exams.js
         if (typeof EXAM_LIST !== 'undefined') {
-            EXAM_LIST.forEach(exam => {
-                const opt = document.createElement('option');
-                opt.value = exam.id;
-                opt.innerText = exam.name;
-                examSelect.appendChild(opt);
+            const subjects = [...new Set(EXAM_LIST.map(e => e.subject || "Khác"))];
+            subjects.forEach(subject => {
+                const optGroup = document.createElement('optgroup');
+                optGroup.label = subject;
+                const examsInSubject = EXAM_LIST.filter(e => (e.subject || "Khác") === subject);
+                examsInSubject.forEach(exam => {
+                    const opt = document.createElement('option');
+                    opt.value = exam.id;
+                    opt.innerText = exam.name;
+                    optGroup.appendChild(opt);
+                });
+                examSelect.appendChild(optGroup);
             });
         }
 
         // 1. Lắng nghe sự kiện chọn bộ đề
         examSelect.addEventListener('change', (e) => {
-            currentExam = e.target.value;
-            if (currentExam) {
-                loadExam(currentExam);
+            const selectedId = e.target.value;
+            if (selectedId) {
+                const examInfo = EXAM_LIST.find(x => x.id === selectedId);
+                currentExam = examInfo.id;
+                currentSubject = examInfo.subject || "Khác";
+                loadExam();
             } else {
                 quizContainer.classList.add('hidden');
             }
         });
 
         // 2. Hàm tải dữ liệu từ CSV
-        function loadExam(examName) {
-            Papa.parse(`./data/${examName}.csv`, {
+        function loadExam() {
+            Papa.parse(`./data/data/${currentSubject}/${currentExam}.csv`, {
                 download: true,
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
-                    // Thêm fallback q['question_id.webp'] do sự khác biệt trong SU25_RE
-                    questions = results.data.filter(q => q.question_id || q['question_id.webp']); 
+                    // Thêm fallback q['question_id.webp'] hoặc q['Link Media'] do sự khác biệt giữa các format
+                    questions = results.data.filter(q => q.question_id || q['question_id.webp'] || q['Link Media']); 
                     currentIndex = 0;
                     userAnswers = questions.map(() => new Set());
                     flaggedQuestions.clear();
@@ -143,9 +154,16 @@
         // 3. Hiển thị câu hỏi hiện tại
         function renderQuestion() {
             const q = questions[currentIndex];
-            const qIdRaw = q.question_id || q['question_id.webp'] || `Q${currentIndex+1}`;
-            const qId = qIdRaw.replace('.webp', '');
-            qImage.src = `./data/images/${currentExam}/${qId}.webp`;
+            
+            // Xử lý nạp ảnh từ URL trực tiếp hoặc từ folder local
+            if (q['Link Media']) {
+                qImage.src = q['Link Media'];
+            } else {
+                const qIdRaw = q.question_id || q['question_id.webp'] || `Q${currentIndex+1}`;
+                const qId = qIdRaw.replace('.webp', '');
+                qImage.src = `./data/images/${currentSubject}/${currentExam}/${qId}.webp`;
+            }
+            
             qIndexLabel.innerText = `Câu ${currentIndex + 1} / ${questions.length}`;
             
             flagCheckbox.checked = flaggedQuestions.has(currentIndex);
@@ -253,7 +271,8 @@
 
             let correctCount = 0;
             questions.forEach((q, i) => {
-                const correctStr = (q.correct_answer || "").toUpperCase().split('').sort().join('');
+                const correctAns = q.correct_answer || q['Đáp án'] || q['Đáp Án'] || "";
+                const correctStr = correctAns.toUpperCase().split('').sort().join('');
                 const userStr = Array.from(userAnswers[i]).sort().join('');
                 if (userStr === correctStr && correctStr !== "") {
                     correctCount++;
@@ -268,7 +287,9 @@
         }
 
         function showFeedbackForCurrentQuestion() {
-            const correctStr = (questions[currentIndex].correct_answer || "").toUpperCase().split('').sort().join('');
+            const q = questions[currentIndex];
+            const correctAns = q.correct_answer || q['Đáp án'] || q['Đáp Án'] || "";
+            const correctStr = correctAns.toUpperCase().split('').sort().join('');
             const userStr = Array.from(userAnswers[currentIndex]).sort().join('');
             questionFeedback.classList.remove('hidden');
             
@@ -309,7 +330,9 @@
             let classes = "w-8 h-8 text-xs font-bold border rounded flex items-center justify-center ";
 
             if (isSubmitted) {
-                const correctStr = (questions[index].correct_answer || "").toUpperCase().split('').sort().join('');
+                const q = questions[index];
+                const correctAns = q.correct_answer || q['Đáp án'] || q['Đáp Án'] || "";
+                const correctStr = correctAns.toUpperCase().split('').sort().join('');
                 const userStr = Array.from(userAnswers[index]).sort().join('');
                 if (userStr === correctStr && correctStr !== "") {
                     classes += "bg-green-500 text-white border-green-600 ";

@@ -15,11 +15,17 @@
 </head>
 <body class="bg-gray-100 p-4 rounded-md">
     <div class="bg-white p-6 rounded-md">
-        <div class="flex flex-wrap justify-between items-center mb-6 border-b pb-4">
-            <h1 class="text-2xl font-bold text-gray-800">📖 Luyện Đề Trắc Nghiệm</h1>
-            <select id="exam-select" class="p-2 border rounded-md bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">-- Chọn bộ đề --</option>
-            </select>
+        <div class="flex flex-wrap justify-between items-center mb-6 border-b pb-4 gap-4">
+            <h1 class="text-2xl font-bold text-gray-800">Luyện Đề FE</h1>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    <label for="time-input" class="text-xs md:text-base text-gray-600 font-medium whitespace-nowrap">Thời gian (phút):</label>
+                    <input type="number" id="time-input" min="1" placeholder="Ko giới hạn" class="p-2 w-28 border rounded-md outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <select id="exam-select" class="p-2 border rounded-md bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">-- Chọn bộ đề --</option>
+                </select>
+            </div>
         </div>
 
         <div id="quiz-container" class="hidden grid grid-cols-1 md:grid-cols-5 gap-6">
@@ -44,6 +50,7 @@
                 </div>
 
                 <div class="space-y-4">
+                    <div id="timer-display" class="hidden text-3xl font-mono font-bold text-red-600 text-center bg-red-50 py-3 rounded border-2 border-red-300"></div>
                     <button onclick="submitTest()" id="submit-btn" class="w-full py-3 bg-red-600 text-white font-bold rounded shadow-md hover:bg-red-700 uppercase">Nộp bài</button>
                     <div id="score-board" class="text-center font-bold p-4 rounded hidden shadow mt-4"></div>
                 </div>
@@ -73,6 +80,8 @@
         let userAnswers = []; // Save answers per question
         let flaggedQuestions = new Set();
         let isSubmitted = false;
+        let timerInterval = null;
+        let timeRemaining = 0;
 
         const examSelect = document.getElementById('exam-select');
         const quizContainer = document.getElementById('quiz-container');
@@ -121,6 +130,8 @@
                     scoreBoard.classList.add('hidden');
                     flagCheckbox.disabled = false;
                     quizContainer.classList.remove('hidden');
+                    
+                    startTimer();
                     renderQuestion();
                     renderNavDots();
                 }
@@ -184,10 +195,56 @@
             updateNavDot(currentIndex);
         }
 
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            const timeInput = document.getElementById('time-input');
+            const timerDisplay = document.getElementById('timer-display');
+            
+            if (timeInput.value && !isNaN(timeInput.value) && parseInt(timeInput.value) > 0) {
+                timeRemaining = parseInt(timeInput.value) * 60;
+                timerDisplay.classList.remove('hidden');
+                updateTimerDisplay();
+                
+                timerInterval = setInterval(() => {
+                    if (isSubmitted) {
+                        clearInterval(timerInterval);
+                        return;
+                    }
+                    timeRemaining--;
+                    updateTimerDisplay();
+                    if (timeRemaining <= 0) {
+                        clearInterval(timerInterval);
+                        alert("Hết thời gian! Hệ thống sẽ tự động nộp bài.");
+                        submitTest(true);
+                    }
+                }, 1000);
+            } else {
+                timerDisplay.classList.add('hidden');
+            }
+        }
+
+        function updateTimerDisplay() {
+            const timerDisplay = document.getElementById('timer-display');
+            const m = Math.floor(timeRemaining / 60);
+            const s = timeRemaining % 60;
+            timerDisplay.innerText = `⏳ ${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`;
+            
+            if (timeRemaining <= 60) {
+                timerDisplay.classList.add('animate-pulse');
+            } else {
+                timerDisplay.classList.remove('animate-pulse');
+            }
+        }
+
         // 5. Nộp bài
-        function submitTest() {
+        function submitTest(autoSubmit = false) {
             if (isSubmitted) return;
-            if (!confirm("Bạn có chắc chắn muốn nộp bài?")) return;
+            if (autoSubmit !== true && !confirm("Bạn có chắc chắn muốn nộp bài?")) return;
+            
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                document.getElementById('timer-display').classList.remove('animate-pulse');
+            }
             isSubmitted = true;
             submitBtn.classList.add('hidden');
             flagCheckbox.disabled = true;

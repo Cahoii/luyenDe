@@ -71,9 +71,11 @@
                 </div>
             </div>
         </div>
+        <p class="text-center text-gray-500 text-sm">Last update: <span id="last-update"></span></p>
     </div>
 
     <script>
+        document.getElementById('last-update').innerText = new Date(document.lastModified).toLocaleString('vi-VN');
         let currentExam = "";
         let questions = [];
         let currentIndex = 0;

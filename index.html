@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>App Luyện Đề Tối Giản</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="./data/exams.js"></script>
     <style>
@@ -126,29 +127,56 @@
             }
         });
 
-        // 2. Hàm tải dữ liệu từ CSV
+        // 2. Hàm tải dữ liệu từ CSV/Excel
         function loadExam() {
-            Papa.parse(`./data/data/${currentSubject}/${currentExam}.csv`, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    // Thêm fallback q['question_id.webp'], q['link_media'] hoặc q.question do sự khác biệt giữa các format
-                    questions = results.data.filter(q => q.question_id || q['question_id.webp'] || q['link_media'] || q.question); 
-                    currentIndex = 0;
-                    userAnswers = questions.map(() => new Set());
-                    flaggedQuestions.clear();
-                    isSubmitted = false;
-                    submitBtn.classList.remove('hidden');
-                    scoreBoard.classList.add('hidden');
-                    flagCheckbox.disabled = false;
-                    quizContainer.classList.remove('hidden');
-                    
-                    startTimer();
-                    renderQuestion();
-                    renderNavDots();
-                }
-            });
+            const xlsxUrl = `./data/data/${currentSubject}/${currentExam}.xlsx`;
+            const csvUrl = `./data/data/${currentSubject}/${currentExam}.csv`;
+
+            // Thử nạp dữ liệu từ file Excel (.xlsx) trước
+            fetch(xlsxUrl)
+                .then(response => {
+                    if (!response.ok) throw new Error("XLSX not found");
+                    return response.arrayBuffer();
+                })
+                .then(buffer => {
+                    const data = new Uint8Array(buffer);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheet = workbook.SheetNames[0];
+                    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], {defval: ""});
+                    processExamData(jsonData);
+                })
+                .catch(() => {
+                    // Nếu lỗi (không tồn tại file excell), fallback sang nạp file CSV
+                    Papa.parse(csvUrl, {
+                        download: true,
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            processExamData(results.data);
+                        },
+                        error: function(err) {
+                            console.error("Error loading CSV:", err);
+                            alert("Không thể tải file dữ liệu cho bộ đề này (cần file .xlsx hoặc .csv).");
+                        }
+                    });
+                });
+        }
+
+        function processExamData(data) {
+            // Thêm fallback q['question_id.webp'], q['link_media'] hoặc q.question do sự khác biệt giữa các format
+            questions = data.filter(q => q.question_id || q['question_id.webp'] || q['link_media'] || q.question); 
+            currentIndex = 0;
+            userAnswers = questions.map(() => new Set());
+            flaggedQuestions.clear();
+            isSubmitted = false;
+            submitBtn.classList.remove('hidden');
+            scoreBoard.classList.add('hidden');
+            flagCheckbox.disabled = false;
+            quizContainer.classList.remove('hidden');
+            
+            startTimer();
+            renderQuestion();
+            renderNavDots();
         }
 
         // 3. Hiển thị câu hỏi hiện tại
@@ -163,7 +191,7 @@
                 qImage.src = imgUrl;
             } else {
                 const qIdRaw = q.question_id || q['question_id.webp'] || `Q${currentIndex+1}`;
-                const qId = qIdRaw.replace('.webp', '');
+                const qId = String(qIdRaw).replace('.webp', '');
                 qImage.src = `./data/images/${currentSubject}/${currentExam}/${qId}.webp`;
             }
             
@@ -275,7 +303,7 @@
             let correctCount = 0;
             questions.forEach((q, i) => {
                 const correctAns = q.correct_answer || q['correct_answer'] || q['correct_answer'] || q.answer || "";
-                const correctStr = correctAns.toUpperCase().split('').sort().join('');
+                const correctStr = String(correctAns).toUpperCase().split('').sort().join('');
                 const userStr = Array.from(userAnswers[i]).sort().join('');
                 if (userStr === correctStr && correctStr !== "") {
                     correctCount++;
@@ -292,7 +320,7 @@
         function showFeedbackForCurrentQuestion() {
             const q = questions[currentIndex];
             const correctAns = q.correct_answer || q['correct_answer'] || q['correct_answer'] || q.answer || "";
-            const correctStr = correctAns.toUpperCase().split('').sort().join('');
+            const correctStr = String(correctAns).toUpperCase().split('').sort().join('');
             const userStr = Array.from(userAnswers[currentIndex]).sort().join('');
             questionFeedback.classList.remove('hidden');
             
@@ -335,7 +363,7 @@
             if (isSubmitted) {
                 const q = questions[index];
                 const correctAns = q.correct_answer || q['correct_answer'] || q['correct_answer'] || q.answer || "";
-                const correctStr = correctAns.toUpperCase().split('').sort().join('');
+                const correctStr = String(correctAns).toUpperCase().split('').sort().join('');
                 const userStr = Array.from(userAnswers[index]).sort().join('');
                 if (userStr === correctStr && correctStr !== "") {
                     classes += "bg-green-500 text-white border-green-600 ";
